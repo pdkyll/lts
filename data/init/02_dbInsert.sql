@@ -1,0 +1,1 @@
+INSERT INTO users (id, email, encrypted_password, nickname) VALUES ('99b8f5e7-c4c3-4d29-a492-751c4c81dde0', 'test@test.test', 'test', 'Test');
