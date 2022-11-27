@@ -11,13 +11,13 @@ import (
 
 // Config is a config :)
 type Config struct {
-	LogLevel            string 	`envconfig:"LOG_LEVEL"`
-	PgURL               string 	`envconfig:"PG_URL"`
-	InitDB	            bool 	`envconfig:"INIT_DB"`
-	HTTPAddr            string 	`envconfig:"HTTP_ADDR"`
-	FolderData          string 	`envconfig:"FOLDERDATA"`
-	TokenExp	        string 	`envconfig:"TOKENEXP"`
-	TokenKey	        string 	`envconfig:"TOKENKEY"`
+	BunVerbose			bool 	`envconfig:"BUN_VERBOSE"`
+	LogLevel            int8 	`envconfig:"LOG_LEVEL"`
+	DBURI               string 	`envconfig:"DB_URI"`
+	APIAddr            	string 	`envconfig:"API_ADDR"`
+	SessionDuration     string 	`envconfig:"SESSION_DURATION"`
+	TokenDuration     	string 	`envconfig:"TOKEN_DURATION"`
+	SignedToken			string 	`envconfig:"SIGNED_TOKEN"`
 }
 
 var (
@@ -36,8 +36,8 @@ func Get() *Config {
 		if err != nil {
 			log.Fatal(err)
 		}
-		infoLog := log.New(os.Stdout, "INIT\t", log.Ldate|log.Ltime|log.LUTC)
-		infoLog.Println("Configuration:", string(configBytes))
+		infoLog := log.New(os.Stdout, "", log.Ldate|log.Ltime|log.LUTC)
+		infoLog.Println("Configuration:\n", string(configBytes))
 	})
 	return &config
 }

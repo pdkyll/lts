@@ -1,0 +1,22 @@
+{
+    "sqltools.connections": [
+        {
+            "previewLimit": 50,
+            "name": "devLicense",
+            "server": "localhost",
+            "driver": "PostgreSQL",
+            "connectString": "postgres://mota:motamota@rc1c-pd00n5y6rttquslp.mdb.yandexcloud.net:6432/license?sslmode=disable",
+            "askForPassword": false,
+            "connectionTimeout": 15
+        },
+        {
+            "previewLimit": 50,
+            "name": "proLicense",
+            "server": "82.202.247.144",
+            "driver": "PostgreSQL",
+            "connectString": "postgres://dev:CgqFv9wR1UePt6Aq@82.202.247.144:5432/license?sslmode=disable",
+            "askForPassword": false,
+            "connectionTimeout": 15
+        }
+    ]
+}

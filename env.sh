@@ -1,16 +1,20 @@
 #!/bin/bash
-export HTTP_ADDR=localhost:2727
-
-# DB settings
-export INIT_DB="false"
-
 # APP settings
-export FOLDERDATA="data"
-export PG_URL="postgres://mota:motamota@rc1c-3d9q0p5x421j77vl.mdb.yandexcloud.net:6432/test?sslmode=disable"
+export API_ADDR=localhost:2727
+export DB_URI="postgres://dev:CgqFv9wR1UePt6Aq@82.202.247.144:5432/license?sslmode=disable"
+
+# Trace settings
+export UPTRACE_DSN="http://pDTThrJirasdfqrxDzAer562XkTX24DQ@up.benefy.ru:14317/2"
+export OTEL_RESOURCE_ATTRIBUTES="service.name=lts-service,service.version=0.1.x"
 
 # Logger settings
-export LOG_LEVEL=debug
+# -1 = Debug; 0 = Info; 1 = Warn; 2 = Error ...
+export LOG_LEVEL=-1
+export BUN_VERBOSE=false
 
 # Token settings
-export TOKENEXP=720h
-export TOKENKEY=625da44e4eaf58d61cf048d168aa6f5e492dea166d8bb54ec06c30de07db57e1
+export SESSION_DURATION="600h"
+export TOKEN_DURATION="6m"
+#export TOKENEXP="60h"
+#export TOKENKEY="LCJJc3N1ZXIiOiJJc3N1ZXIiLCJVc2VybmFtZSI6IkphdmFJblVzZSIsImV4cCI6MTY2OTQ3NDcxMywiaWF0IjoxNjY5NDc0NzEzfQ.kD1xZbOm33yD4f0Q0Prlk"
+export SIGNED_TOKEN="LCJJc3N1ZXIiOiJJc3N1ZXIiLCJVc2VybmFtZSI6IkphdmFJblVzZSIsImV4cCI6MTY2OTQ3NDcxMywiaWF0IjoxNjY5NDc0NzEzfQ.kD1xZbOm33yD4f0Q0Prlk"

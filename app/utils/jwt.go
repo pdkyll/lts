@@ -24,11 +24,11 @@ func VerifyPassword(hash string, password string) error {
 }
 
 // TokenGenerate generates the jwt token based on payload
-func TokenGenerate(u *model.User) (string, error) {
+func TokenGenerate1(u *model.User) (string, error) {
 	cfg := config.Get()
 	
 
-	v, err := time.ParseDuration(cfg.TokenExp)
+	v, err := time.ParseDuration(cfg.SessionDuration)
 	if err != nil {
 		return "", err//panic("Invalid time duration. Should be time.ParseDuration string")
 	}
@@ -38,7 +38,7 @@ func TokenGenerate(u *model.User) (string, error) {
 		"id":  u.ID,
 	})
 
-	token, err := t.SignedString([]byte(cfg.TokenKey))
+	token, err := t.SignedString([]byte(cfg.SignedToken))
 
 	if err != nil {
 		return "", err
@@ -55,11 +55,11 @@ func parse(token string) (*jwt.Token, error) {
 	return jwt.Parse(token, func(t *jwt.Token) (interface{}, error) {
 		// Don't forget to validate the alg is what you expect:
 		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("Unexpected signing method: %v", t.Header["alg"])
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
 		}
 
 		// hmacSampleSecret is a []byte containing your secret, e.g. []byte("my_secret_key")
-		return []byte(config.Get().TokenKey), nil
+		return []byte(config.Get().SignedToken), nil
 	})
 }
 

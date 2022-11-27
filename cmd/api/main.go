@@ -2,143 +2,109 @@ package main
 
 import (
 	"context"
-	"strings"
-	"fmt"
-	"io/ioutil"
-	"log"
-	"os"
+	//"os"
 
-	"github.com/jackc/pgx"
+	"github.com/uptrace/uptrace-go/uptrace"
 	"github.com/gofiber/fiber/v2"
 	"github.com/gofiber/fiber/v2/middleware/cors"
-	
+	"go.uber.org/zap"
+
 	"gitlab.com/m0ta/lts/app/config"
 	"gitlab.com/m0ta/lts/app/controller"
 	"gitlab.com/m0ta/lts/app/router"
 	"gitlab.com/m0ta/lts/app/service"
 	"gitlab.com/m0ta/lts/app/store"
 	"gitlab.com/m0ta/lts/app/utils"
+	"gitlab.com/m0ta/lts/app/log"
 )
 
 func main() {
-	if err := run(); err != nil {
-		log.Fatal(err)
+	cfg 	:= config.Get()
+	//logger 	:= logger.New(cfg)//newLogger(cfg)
+	log.New(cfg)
+    defer log.Logger.Sync()
+	
+	if err := run(cfg, log.Logger); err != nil {
+		log.Logger.Fatal(err.Error())
 	}
 }
 
-func run() error {
-	ctx := context.Background()
-
-	// config
-	cfg := config.Get()
-
-	// logger
+// func newLogger(cfg *config.Config) *zap.Logger {
+// 	pe 		:= zap.NewProductionEncoderConfig()
+// 	level 	:= zapcore.Level(cfg.LogLevel)
+// 	//pe := zap.NewDevelopmentEncoderConfig()
+//     //fileEncoder := zapcore.NewJSONEncoder(pe)
 	
+//     pe.EncodeTime 	= zapcore.ISO8601TimeEncoder
+// 	pe.EncodeLevel 	= zapcore.CapitalColorLevelEncoder
+// 	pe.EncodeCaller = zapcore.FullCallerEncoder
+	
+//     consoleEncoder 	:= zapcore.NewConsoleEncoder(pe)
+
+//  	core := zapcore.NewTee(
+//         //zapcore.NewCore(fileEncoder, zapcore.AddSync(f), zap.DebugLevel),
+//         zapcore.NewCore(consoleEncoder, zapcore.AddSync(os.Stdout), level),
+//     )
+// 	return zap.New(core, zap.AddCaller())
+// }
+
+func run(cfg *config.Config, logger *zap.Logger) error {
+	ctx := context.Background()
+	// Start uptrace
+	uptrace.ConfigureOpentelemetry(
+		// copy your project DSN here or use UPTRACE_DSN env var
+		//uptrace.WithDSN("https://<key>@uptrace.dev/<project_id>"),
+		//uptrace.WithServiceName("<service_name>"),
+		//uptrace.WithServiceVersion("<version>"),
+	)
+	// Send buffered spans and free resources.
+	defer uptrace.Shutdown(ctx)
+
+	// Start root span of otel
+	//tracer := otel.Tracer("lts")
+	ctx, rootSpan := log.Tracer.Start(ctx, "main")
+	defer rootSpan.End()
+
 	// Init repository store (with postgresql inside)
-	store, err := store.New(ctx)
+	store, err := store.New(ctx, logger)
 	if err != nil {
 		return utils.ErrorWrap(err, "store.New failed")
 	}
-
-	//init DB
-	// TODO do migration
-	if cfg.InitDB {
-		var a string
-		fmt.Print("== IMPORTANT == Start database initialization?(y)")
-		fmt.Fscanln(os.Stdin, &a)
-		if a == "y" {
-			err := initDB()
-			if err != nil {
-				return utils.ErrorWrap(err, "InitDB failed")
-			}
-		} else {
-			return utils.ErrorNew("Database initialization canceled")
-		}
-		fmt.Println("Database initialization completed")
-		return nil
-	}
-
+	
 	// Init service manager
-	serviceManager, err := service.NewManager(ctx, store)
+	serviceManager, err := service.NewManager(ctx, store, logger)
 	if err != nil {
 		return utils.ErrorWrap(err, "manager.New failed")
 	}
 
 	// Init controllers
+	cWelcome	:= controller.NewWelcome(ctx, serviceManager)
 	cUser 		:= controller.NewUsers(ctx, serviceManager)
+	cToken 		:= controller.NewTokens(ctx, serviceManager)
 	
 	// Initialize Fiber instance
 	app := fiber.New()
 	app.Use(cors.New())
 
-	api := router.SetupRoutes(app, cUser)
-	router.SetupRoutesForUser(api, cUser)
+	api := router.SetupWelcomeRoutes(ctx, app, cWelcome)
+	router.SetupUserRoutes(api, cUser)
+	router.SetupTokenRoutes(api, cToken)
 
 	s := app.Stack()
 	for _, v := range s {
 		for _, w := range v {
 			if (w.Method == "GET") || (w.Method == "POST") || (w.Method == "DELETE") || (w.Method == "PATCH") {
-				serviceManager.Logger.Info.Println(w.Method, w.Path)
+				serviceManager.Logger.Debug(
+					"available api methods:",
+					zap.String("Method", w.Method),
+					zap.String("Path", w.Path),
+				)
 			}
 		}
 	}
 
-	// start api server
-	log.Fatal(app.Listen(cfg.HTTPAddr))
+	// Start api server
+	logger.Fatal(app.Listen(cfg.APIAddr).Error())
 
-	return nil
-}
-
-//initDB ...something
-func initDB () error {
-	fmt.Println("== Database initialization started..")
-	cfg := config.Get()
-	if cfg.PgURL == "" {
-		return utils.ErrorNew("No URL to connect Postgre")
-	}
-	
-	pgxConfig, err := pgx.ParseConnectionString(cfg.PgURL)
-	if err != nil {
-		return err
-	}
-
-	conn, err := pgx.Connect(pgxConfig)
-	if err != nil {
-		return err
-	}
-	
-	_, err = conn.Exec("SELECT 1")
-	if err != nil {
-		return err
-	}
-
-	defer conn.Close()
-
-	// reading sql file to Exec
-	dirData := "./data/init"
-	lst, err := ioutil.ReadDir(dirData)
-	if err != nil {
-		return err
-	}
-	for _, val := range lst {
-		if !val.IsDir() {
-			if (strings.HasSuffix(val.Name(), ".sql")) {
-				data, err := ioutil.ReadFile(fmt.Sprintf("%v/%v", dirData, val.Name()))
-				if err != nil {
-					return err
-				}
-
-				strSQL := string(data)
-
-				_, err = conn.Exec(strSQL)
-				if err != nil {
-					return err
-				}
-				fmt.Println("-- Initialized DB from sql:", val.Name())
-			}
-		}
-	}
-	
-	fmt.Println("== Database initialization completed.. successfully!")
 	return nil
 }

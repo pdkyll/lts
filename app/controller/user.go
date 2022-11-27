@@ -19,7 +19,6 @@ type UserController struct {
 }
 
 // NewUsers creates a new user controller.
-//func NewUsers(ctx context.Context, services *service.Manager, logger *logger.Logger) *UserController {
 func NewUsers(ctx context.Context, services *service.Manager) *UserController {
 	return &UserController{
 		ctx:      ctx,
@@ -28,46 +27,38 @@ func NewUsers(ctx context.Context, services *service.Manager) *UserController {
 	}
 }
 
-
 // Create creates new user
 func (ctr *UserController) Create(ctx *fiber.Ctx) error {
-
-	user := *new(model.User)
-	if err := ctx.BodyParser(&user); err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Review your input"), "data": err})
-
+	user := &model.User{}
+	if err := ctx.BodyParser(user); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"status": "error", "message": "Review your input", "data": err})
 	}
 
-	// check validation
-	
-	// hash password
-	hash, err := utils.HashPassword(user.Password)
+	// Check validation
+	err := ctr.services.User.Validate(ctx.Context(), user)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Couldn't hash password"), "data": err})
-
+		return ctx.Status(412).JSON(fiber.Map{"status": "error", "message": "Incorrect data", "data": err})
 	}
-	user.EncryptedPassword = hash
 	
-	// create user
-	createdUser, err := ctr.services.User.Create(ctx.Context(), &user)
+	// Create user
+	user, err = ctr.services.User.Create(ctx.Context(), user)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Couldn't create user"), "data": err})
+		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": "Couldn't create user", "data": err})
 	}
 
-	return ctx.JSON(fiber.Map{"status": "success", "message": "User created", "data": createdUser})
+	return ctx.JSON(fiber.Map{"status": "success", "message": "User created", "data": user})
 }
 
 // Get returns user by ID
 func (ctr *UserController) Get(ctx *fiber.Ctx) error {
 	userID, err := uuid.Parse(ctx.Locals("user_id").(string))
 	if err != nil {
-		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "could not parse user UUID"), "data": nil})
+		return ctx.Status(403).JSON(fiber.Map{"status": "error", "message": "Couldn't parse user UUID", "data": nil})
 	}
 
 	user, err := ctr.services.User.Get(ctx.Context(), userID)
-
 	if err != nil {
-		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "could not get user"), "data": nil})
+		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": "Data couldn't found", "data": nil})
 	}
 	
 	return ctx.JSON(fiber.Map{"status": "success", "message": "User found", "data": user})
@@ -75,135 +66,164 @@ func (ctr *UserController) Get(ctx *fiber.Ctx) error {
 
 // Update user by user JSON
 func (ctr *UserController) Update(ctx *fiber.Ctx) error {
-	user := *new(model.User)
-	if err := ctx.BodyParser(&user); err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Review your input (UpdateUser)"), "data": err})
+	user := &model.User{}
+	if err := ctx.BodyParser(user); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"status": "error", "message": "Review your input", "data": err})
 	}
 
 	userID, err := uuid.Parse(ctx.Locals("user_id").(string))
 	if err != nil {
-		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "could not parse user UUID"), "data": nil})
+		return ctx.Status(403).JSON(fiber.Map{"status": "error", "message": "Couldn't parse user UUID", "data": nil})
 	}
 
-	// check validation
-	
+	// Check validation
+	// err = ctr.services.User.Validate(ctx.Context(), user)
+	// if err != nil {
+	// 	return ctx.Status(412).JSON(fiber.Map{"status": "error", "message": "Incorrect data", "data": err})
+	// }
+
+	// Update user
 	user.ID = userID
-	
-	// update user
-	updatedUser, err := ctr.services.User.Update(ctx.Context(), &user)
+	updUser, err := ctr.services.User.Update(ctx.Context(), user)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Couldn't update user"), "data": err})
+		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": "Couldn't update user", "data": err})
 	}
 
-	return ctx.JSON(fiber.Map{"status": "success", "message": "User updated", "data": updatedUser})
+	return ctx.JSON(fiber.Map{"status": "success", "message": "User updated", "data": updUser})
 }
 
 // Delete deletes user by ID
 func (ctr *UserController) Delete(ctx *fiber.Ctx) error {
-	m := *new(model.User)
-	if err := ctx.BodyParser(&m); err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Review your input (UpdateUser)"), "data": err})
+	user := &model.User{}
+	if err := ctx.BodyParser(user); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"status": "error", "message": "Review your input", "data": err})
 	}
 
 	userID, err := uuid.Parse(ctx.Locals("user_id").(string))
 	if err != nil {
-		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "could not parse user UUID"), "data": nil})
+		return ctx.Status(403).JSON(fiber.Map{"status": "error", "message": "Couldn't parse user UUID", "data": nil})
 	}
 
-	user, err := ctr.services.User.Get(ctx.Context(), userID)
+	foundUser, err := ctr.services.User.Get(ctx.Context(), userID)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "no user found"), "data": err})
+		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": "Data couldn't found", "data": nil})
 	}
 
-	// verify password
-	err = utils.VerifyPassword(user.EncryptedPassword, m.Password)
+	// Verify password
+	err = utils.VerifyPassword(foundUser.EncryptedPassword, user.Password)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "incorrect email or password"), "data": err})
+		return ctx.Status(401).JSON(fiber.Map{"status": "error", "message": "Incorrect email or password", "data": err})
 	}
 
 	err = ctr.services.User.Delete(ctx.Context(), userID)
-
 	if err != nil {
-		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "could not delete user"), "data": nil})
+		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": "Couldn't delete user", "data": nil})
 	}
 	
 	return ctx.JSON(fiber.Map{"status": "success", "message": "User deleted", "data": nil})
 }
 
-// List returns user by ID
+// List returns user list
 func (ctr *UserController) List(ctx *fiber.Ctx) error {
-	users, err := ctr.services.User.List(ctx.Context())
-
+	_, err := uuid.Parse(ctx.Locals("user_id").(string))
 	if err != nil {
-		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "could not get user"), "data": nil})
+		return ctx.Status(403).JSON(fiber.Map{"status": "error", "message": "Couldn't parse user UUID", "data": nil})
+	}
+
+	users, err := ctr.services.User.List(ctx.Context())
+	if err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": "Couldn't list users", "data": nil})
 	}
 	
-	return ctx.JSON(fiber.Map{"status": "success", "message": "User's list found", "data": users})
+	return ctx.JSON(fiber.Map{"status": "success", "message": "User list found", "data": users})
 }
 
 // SignIn ...
 func (ctr *UserController) SignIn(ctx *fiber.Ctx) error {
-	type LoginInput struct {
-		Email 		string `json:"email"`
-		Password 	string `json:"password"`
+	user := &model.User{}
+	if err := ctx.BodyParser(user); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"status": "error", "message": "Review your input", "data": err})
 	}
 
-	var input *LoginInput
-
-	if err := ctx.BodyParser(&input); err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Review your input"), "data": err})
-	}
-
-	// find user by email
-	foundUser, err := ctr.services.User.GetUserByEmail(ctx.Context(), input.Email)
+	foundUser, err := ctr.services.User.GetByEmail(ctx.Context(), user.Email)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Couldn't find user by email"), "data": err})
+		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": "Data couldn't found", "data": nil})
 	}
 
-	// verify password
-	err = utils.VerifyPassword(foundUser.EncryptedPassword, input.Password)
+	// Verify password
+	err = utils.VerifyPassword(foundUser.EncryptedPassword, user.Password)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Incorrect email or password"), "data": err})
+		return ctx.Status(401).JSON(fiber.Map{"status": "error", "message": "Incorrect email or password", "data": err})
 	}
 
-	// get user token
-	token, err := utils.TokenGenerate(foundUser)
+	// Get user token
+	token, err := foundUser.GenerateToken()//utils.TokenGenerate(foundUser)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Couldn't generate token"), "data": 530})
+		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": "Couldn't generate token", "data": err})
 	}
+	foundUser.Token = token
 
-	return ctx.JSON(fiber.Map{"status": "success", "message": "User signined", "data": foundUser, "token": token})
+	return ctx.JSON(fiber.Map{"status": "success", "message": "User logined", "data": foundUser})
 }
 
 // SignUp ...
 func (ctr *UserController) SignUp(ctx *fiber.Ctx) error {
-	user := *new(model.User)
-	if err := ctx.BodyParser(&user); err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Review your input"), "data": err})
-
+	user := &model.User{}
+	if err := ctx.BodyParser(user); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"status": "error", "message": "Review your input", "data": err})
 	}
 
-	// check validation
-	
-	// hash password
-	hash, err := utils.HashPassword(user.Password)
+	// Check validation
+	err := ctr.services.User.Validate(ctx.Context(), user)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Couldn't hash password"), "data": err})
-
+		return ctx.Status(412).JSON(fiber.Map{"status": "error", "message": "Incorrect data", "data": err})
 	}
-	user.EncryptedPassword = hash
-	
-	// создаем пользователя
-	createdUser, err := ctr.services.User.Create(ctx.Context(), &user)
+
+	// Create user
+	updUser, err := ctr.services.User.Create(ctx.Context(), user)
 	if err != nil {
-		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Couldn't create user"), "data": err})
+		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": "Couldn't create user", "data": err})
 	}
 
-	// get user token
-	token, err := utils.TokenGenerate(createdUser)
+	// Get user token
+	token, err := updUser.GenerateToken()//utils.TokenGenerate(updUser)
 	if err != nil {
 		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": utils.ErrorString(err, "Couldn't generate token"), "data": err})
 	}
+	updUser.Token = token
 
-	return ctx.JSON(fiber.Map{"status": "success", "message": "User created", "data": createdUser, "token": token})
+	return ctx.JSON(fiber.Map{"status": "success", "message": "User created", "data": updUser})
+}
+
+// ChangePassword ...
+func (ctr *UserController) ChangePassword(ctx *fiber.Ctx) error {
+	user := &model.User{}
+	if err := ctx.BodyParser(user); err != nil {
+		return ctx.Status(400).JSON(fiber.Map{"status": "error", "message": "Review your input", "data": err})
+	}
+
+	// Check validation
+	err := ctr.services.User.Validate(ctx.Context(), user)
+	if err != nil {
+		return ctx.Status(412).JSON(fiber.Map{"status": "error", "message": "Incorrect data", "data": err})
+	}
+
+	userID, err := uuid.Parse(ctx.Locals("user_id").(string))
+	if err != nil {
+		return ctx.Status(403).JSON(fiber.Map{"status": "error", "message": "Couldn't parse user UUID", "data": nil})
+	}
+
+	// Find user
+	updUser, err := ctr.services.User.Get(ctx.Context(), userID)
+	if err != nil {
+		return ctx.Status(404).JSON(fiber.Map{"status": "error", "message": "Data couldn't found", "data": nil})
+	}
+
+	// Change user password
+	updUser, err = ctr.services.User.ChangePassword(ctx.Context(), updUser, user.Password)
+	if err != nil {
+		return ctx.Status(500).JSON(fiber.Map{"status": "error", "message": "Couldn't change user password", "data": err})
+	}
+
+	return ctx.JSON(fiber.Map{"status": "success", "message": "User password changed", "data": updUser})
 }

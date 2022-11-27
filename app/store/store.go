@@ -3,24 +3,24 @@ package store
 import (
 	"context"
 	"time"
-	"log"
 
 	"github.com/pkg/errors"
+	"go.uber.org/zap"
 
 	"gitlab.com/m0ta/lts/app/store/bun"
 )
 
 // Store ...
 type Store struct {
-	Bun    		*bun.DB       // for KeepAlivePg (see below)
+	Bun    		*bun.DB
+	Logger 		*zap.Logger
 	User 		UserRepo
+	Token 		TokenRepo
 }
 
 // New creates new store
-func New(ctx context.Context) (*Store, error) {
-	//cfg := config.Get()
-
-	// connect to Postgres
+func New(ctx context.Context, logger *zap.Logger) (*Store, error) {
+	// Connect to Postgres
 	bunDB, err := bun.Dial()
 	if err != nil {
 		return nil, errors.Wrap(err, "bun.Dial failed")
@@ -30,15 +30,17 @@ func New(ctx context.Context) (*Store, error) {
 
 	// Init Postgres repositories
 	if bunDB != nil {
-		store.Bun = bunDB
+		store.Bun 	= bunDB
+		store.Logger= logger
 		go store.KeepAliveBun()
-		store.User 		= bun.NewUserRepo(bunDB)
+		store.User 	= bun.NewUserRepo(bunDB, logger)
+		store.Token	= bun.NewTokenRepo(bunDB, logger)
 	}
 
 	return &store, nil
 }
 
-// KeepAlivePollPeriod is a Pg/MySQL keepalive check time period
+// KeepAlivePollPeriod is a DB keepalive check time period
 const KeepAlivePollPeriod = 30
 
 // KeepAliveBun makes sure PostgreSQL is alive and reconnects if needed
@@ -56,12 +58,12 @@ func (store *Store) KeepAliveBun() {
 		if !lostConnect {
 			continue
 		}
-		log.Println("[store.KeepAliveBun] Lost PostgreSQL connection. Restoring...")
+		store.Logger.Warn("[store.KeepAliveBun] Lost PostgreSQL connection. Restoring...")
 		store.Bun, err = bun.Dial()
 		if err != nil {
-			log.Fatalln(err)
+			store.Logger.Fatal(err.Error())
 			continue
 		}
-		log.Println("[store.KeepAliveBun] PostgreSQL reconnected")
+		store.Logger.Warn("[store.KeepAliveBun] PostgreSQL reconnected")
 	}
 }
