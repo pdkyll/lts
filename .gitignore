@@ -1,6 +1,5 @@
 .gitignore
-build
-build/**
-.vscode
-.vscode/**
+build/
+#build/**
+.vscode/
 env.sh
